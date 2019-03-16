@@ -1,0 +1,147 @@
+---
+title: "PracticalML_CourseProject"
+author: "Angela Frolov"
+date: "March 14, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+Devices such as Jawbone Up, Nike FuelBand, and Fitbit make possible to collect large amounts of moovement data. Mostly this data quantifies how much of a particular activity people do, but rarely quantifies how well they do it. In this project we use data collected from accelerometers on the belts, forearms, arms, and dumbells of 6 participants, who were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The goal of this project is to predict the manner ( the variable "classe") in which this participants did the exercise. 
+
+## Libraries
+```{r}
+# Loading Libraries.
+
+library(caret)
+library(e1071)
+library(gbm)
+library(randomForest)
+library(rpart)
+```
+## Getting, cleaning and partitioning data
+
+```{r}
+# Reading in data.
+
+train_in <- read.csv(file = "pml-training.csv", header = T, na.strings = c("NA","#DIV/0!",""))
+test_in <- read.csv(file = "pml-testing.csv", header = T, na.strings = c("NA","#DIV/0!",""))
+
+# Checking dimensions of sets
+
+dim(train_in) 
+dim(test_in)
+
+# Cleaning data: removing the first seven (not affecting our predictions) variables, 
+# and variables with majority of NA values.
+train_in <- train_in[, -c(1:7)]
+test_in <- test_in[, -c(1:7)]
+
+# colMeans(is.na()) shows that all columns with NA values have more then 95% of them.
+
+mostly_NA_train <- colMeans(is.na(train_in)) > 0.95
+train_in <- train_in[, mostly_NA_train==F]
+
+mostly_NA_test <- colMeans(is.na(test_in)) > 0.95
+test_in <- test_in[, mostly_NA_test==F]
+
+# Testing if variables are the same in both sets.They are.
+names(train_in) %in% names(test_in)
+
+# Partitioning train_in data into testing and training sets
+
+inTrain <- createDataPartition(train_in$classe, p=0.75, list = FALSE)
+myTrain <- train_in[inTrain, ]
+myTest <- train_in[-inTrain, ]
+
+# Checking dimensions of sets
+
+dim(myTrain)
+dim(myTest) 
+
+```
+## Setting seed
+
+```{r}
+set.seed(46)
+```
+
+## Training models
+
+The models, that will be used for training and testing on the training data set, are Classification Trees, Random Forests and Support Vector Machines. Then based on the performance results, the model with the highest accuracy will be used for prediction on the testing data set. 
+
+## Classification Trees
+
+To train the model a 5-fold cross validation will be used.
+```{r}
+# Predicting with trees.
+controlTR <- trainControl(method="cv", number=5, verboseIter=FALSE)
+
+modFit_tree <- train(classe~., method="rpart", data=myTrain, trControl=controlTR)
+
+print(modFit_tree$finalModel)
+
+modPredict_tree <- predict(modFit_tree, newdata=myTest)
+
+confMatrix_tree <- confusionMatrix(myTest$classe,modPredict_tree)
+
+print(confMatrix_tree)
+
+```
+Accuracy of classification trees model is `r confMatrix_tree$overall[[1]]`, with the out-of-sample error `r round(1-confMatrix_tree$overall[[1]],2)`.
+
+## Random Forest
+
+To train the model a 3-fold cross validation will be used.
+```{r}
+# Predicting with random forests.
+
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFit_rf <- train(classe ~ ., data=myTrain, method="rf", trControl=controlRF)
+modFit_rf$finalModel
+
+modPred_rf <- predict(modFit_rf, newdata=myTest)
+confMatrix_rf <- confusionMatrix(myTest$classe, modPred_rf)
+
+print(confMatrix_rf)
+
+```
+Accuracy of random forests model is `r confMatrix_rf$overall[[1]]`, with out-of-sample error `r round(1-confMatrix_rf$overall[[1]],2)`.
+
+
+## Support Vector Machines
+
+
+```{r}
+# Predicting with SVM
+
+modFit_svm <- svm(classe ~ ., data = myTrain, cross=3)
+print(modFit_svm)
+
+modPred_svm <- predict(modFit_svm, newdata = myTest)
+confMatrix_svm <- confusionMatrix(myTest$classe, modPred_svm)
+
+print(confMatrix_svm)
+
+```
+Accuracy of Support Vector Machines Model is `r confMatrix_svm$overall[[1]]`, with out-of-sample error `r round(1-confMatrix_svm$overall[[1]],2)`.
+
+
+Based on the data from confusion matrices, the Random Forest data model gives the highest accuracy, and, therefore, shall be used for prediction on our final test set.
+
+## Predicting with Random Forests model
+
+```{r}
+# Using random forests model on test data.
+
+finalResult_rf <- predict(modFit_rf, newdata = test_in)
+print(finalResult_rf)
+
+```
+
